@@ -1,5 +1,5 @@
 function convert_fluorescenece_trace_into_raster_format(fluorescence_trace_type,session_id,...
-    stimulus, raster_dir_name, nwb_dir_name)
+    stimulus, raster_dir_name, nwb_dir_name,varargin)
 
 % convert_fluorescenece_trace_into_raster_format(fluorescence_trace_type,session_id,...
 % stimulus, raster_dir_name, nwb_dir_name, varargin)
@@ -8,12 +8,13 @@ function convert_fluorescenece_trace_into_raster_format(fluorescence_trace_type,
 % of stimuli you are interested in, and the type of fluorescence trace you want to use,
 % along with the directory names for the nwb_files and raster_data
 % 
-% varargin is still under developing, please ignore it for now
+% if there is a varargin, the conversion will push through regardless if the
+% target folder already exist or not.
 
 
 
 tic
-
+ignore_existing_file = varargin;
 
 addpath(genpath(nwb_dir_name))
 
@@ -22,7 +23,8 @@ nwb_name = [num2str(session_id) '.nwb'];
 % create boc for the interested session to generate site_info and
 % session_type for sparse noise name discrepancy
 
-manifests = get_manifests_info_from_api();
+load('manifests')
+% manifests = get_manifests_info_from_api();
 
 boc = brain_observatory_cache(manifests);
 
@@ -84,8 +86,9 @@ end
 % if the process of converting for this session was aborted once that the
 % session dir exists with no raster file or partial raster files, or the
 % session was newly made, we (re)convert all raster files
-if size(fluorescenece_trace,2) ~=...
-        length(dir(current_raster_dir_name_full))-2
+if or (size(fluorescenece_trace,2) ~=...
+        length(dir(current_raster_dir_name_full))-2, ...
+        ignore_existing_file{1} == 1)
 
     % fetching some parameters (hardcoded inside the function) that help build the raster data such as window
     % frames, sampling frequency, etc.
@@ -259,7 +262,8 @@ switch stimulus
         
         % In the case of drifting_gratings, there is this thrid variable called
         % blank sweep with two levels 1 and 0, which is redundant and discarded
-        % here.
+        % here. first variable is TF, second variable is Ori(technically
+        % drifiting direction)
         
         if strcmp(stimulus,'drifting_gratings') == 1
             
@@ -309,12 +313,67 @@ switch stimulus
         
         raster_labels.(combined_variable_name) = {'combined'};
         
+        
         for iVariable = 1:size(variables,1)
             
             raster_labels.(char(strcat('stimulus_', variables(iVariable)))) = parsed_labels{iVariable};
             raster_labels.(combined_variable_name) = strcat(raster_labels.(combined_variable_name), {'_'}, parsed_labels{iVariable});
             
         end
+        
+        if strcmp(stimulus,'static_gratings') == 1
+            
+            combined_ori_sf_name = 'combined_orientation_spatial_frequency';
+            
+            raster_labels.(combined_ori_sf_name) = strcat({'combined_'},...
+                raster_labels.stimulus_orientation,{'_'},...
+                raster_labels.stimulus_spatial_frequency);
+                   
+        end
+        
+        
+        if strcmp(stimulus,'drifting_gratings') == 1
+            
+            grtOri = 'gratingOrientation';
+            
+            grtOri_labels = cell(1, size(labels, 2));
+            
+            for iTrial = 1:size(labels, 2)
+                
+                iDriDir = raster_labels.stimulus_orientation{iTrial};
+                
+                if strcmp(iDriDir, 'blank')
+                    grtOri_labels{iTrial} = iDriDir;
+                else 
+                    
+                    iDriDir = str2num(iDriDir);
+               switch iDriDir
+                   
+                   case {0,45}
+                       grtOri_labels{iTrial} = num2str(iDriDir + 90);
+                       
+                   case {90, 135,180, 225}
+                       grtOri_labels{iTrial} = num2str(iDriDir - 90);
+                       
+                   case {270, 315}
+                       grtOri_labels{iTrial} = num2str(iDriDir - 270);
+               end
+                end
+            end
+            
+            raster_labels.(grtOri) = grtOri_labels;
+            
+            combined_TF_grtOri = ['combined_TF_' grtOri];
+            
+            raster_labels.(combined_TF_grtOri) = strcat({'combined_'},...
+                raster_labels.stimulus_temporal_frequency,{'_'},...
+                raster_labels.(grtOri));
+           
+            
+            
+        end
+                
+            
         
     case {'locally_sparse_noise_4deg','locally_sparse_noise_8deg' }
         
