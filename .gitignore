@@ -1,7 +1,3 @@
-nwb_files/
-
-raster_files/
-
 */*.m~
 
 *.m~
@@ -10,7 +6,4 @@ raster_files/
 
 trash*
 
-*/private*
-
-private*
 
